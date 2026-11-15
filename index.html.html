@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mein Spiel – Schritt 4</title>
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #eef0f2;
+    --text: #1d2329;
+    --muted: #5b6670;
+    --arena: #d8dde1;
+    --grid: #c4cbd1;
+    --player: #c9731a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14181c;
+      --text: #e3e7ea;
+      --muted: #94a0aa;
+      --arena: #1d2329;
+      --grid: #29313a;
+      --player: #f2a33a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14181c;
+    --text: #e3e7ea;
+    --muted: #94a0aa;
+    --arena: #1d2329;
+    --grid: #29313a;
+    --player: #f2a33a;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    gap: 14px;
+  }
+  h1 { font-size: 1.25rem; margin: 0; font-weight: 600; }
+  p { margin: 0; color: var(--muted); font-size: 0.95rem; text-align: center; max-width: 60ch; }
+  canvas {
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 16 / 10;
+    background: var(--arena);
+    border-radius: 10px;
+    display: block;
+  }
+  kbd {
+    font: inherit;
+    padding: 1px 7px;
+    border: 1px solid var(--grid);
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+  <h1>Schritt 4: Extraktion und Dash</h1>
+  <canvas id="spiel" width="800" height="500"></canvas>
+  <p>Bewege die Figur mit <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> oder den Pfeiltasten. Sammle grüne Beute ein und bring sie in der blauen Zone in Sicherheit: Steh dort kurz still. Stirbst du vorher, ist der Rucksack weg. Mit <kbd>Shift</kbd> machst du einen Dash, in dem dich Gegner nicht treffen. Nach dem Aus startest du mit <kbd>Leertaste</kbd> neu. Klick zuerst ins Spielfeld, falls nichts passiert.</p>
+
+<script>
+  // 1) Das Spielfeld holen. "canvas" ist die Zeichenfläche, "ctx" der Pinsel.
+  const canvas = document.getElementById("spiel");
+  const ctx = canvas.getContext("2d");
+
+  // 2) Der Zustand der Spielfigur: wo sie ist, wie groß und wie schnell.
+  const spieler = {
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+    radius: 16,
+    tempo: 340 // Pixel pro Sekunde
+  };
+
+  // 2b) Gegner: eine Liste (Array). Jeder Gegner hat Position, Größe und Tempo.
+  let gegner = [];
+  let zeitBisNeuerGegner = 0;
+  let ueberlebt = 0;   // Sekunden
+  let vorbei = false;  // true = Game Over
+  let beute = [];      // Einsammelbare Dinge
+  let zeitBisNeueBeute = 0;
+  let punkte = 0;
+  let bestwert = 0;    // Dein bestes Ergebnis, solange die Seite offen ist
+  let rucksack = 0;    // Eingesammelte Beute, noch nicht in Sicherheit
+  let extraktion = 0;  // Sekunden, die du schon in der Zone stehst
+  let meldung = 0;     // Restzeit der Meldung "Extrahiert!"
+  let dashZeit = 0;    // Restzeit des laufenden Dashs
+  let dashPause = 0;   // Wartezeit bis zum nächsten Dash
+  let richtung = { x: 1, y: 0 }; // Letzte Blickrichtung für den Dash
+  const zone = { x: canvas.width - 90, y: canvas.height - 90, radius: 65, dauer: 1.2 }; // dauer = Sekunden zum Extrahieren
+
+  function neuerGegner() {
+    // Zufällige Seite wählen, dort erscheint der Gegner knapp außerhalb des Felds.
+    const seite = Math.floor(Math.random() * 4);
+    let x, y;
+    if (seite === 0)      { x = Math.random() * canvas.width; y = -20; }
+    else if (seite === 1) { x = canvas.width + 20; y = Math.random() * canvas.height; }
+    else if (seite === 2) { x = Math.random() * canvas.width; y = canvas.height + 20; }
+    else                  { x = -20; y = Math.random() * canvas.height; }
+    gegner.push({ x, y, radius: 12, tempo: 90 + Math.random() * 60 });
+  }
+
+  function neueBeute() {
+    // Zufällige Stelle im Spielfeld, mit etwas Abstand zum Rand.
+    beute.push({
+      x: 40 + Math.random() * (canvas.width - 80),
+      y: 40 + Math.random() * (canvas.height - 80),
+      radius: 9,
+      leben: 8 // Sekunden, bis sie wieder verschwindet
+    });
+  }
+
+  function neustart() {
+    spieler.x = canvas.width / 2;
+    spieler.y = canvas.height / 2;
+    gegner = [];
+    zeitBisNeuerGegner = 0;
+    ueberlebt = 0;
+    vorbei = false;
+    beute = [];
+    zeitBisNeueBeute = 0;
+    punkte = 0;
+    rucksack = 0;
+    extraktion = 0;
+    meldung = 0;
+    dashZeit = 0;
+    dashPause = 0;
+  }
+
+  // 3) Merken, welche Tasten gerade gedrückt sind.
+  const tasten = {};
+  window.addEventListener("keydown", (e) => {
+    tasten[e.key.toLowerCase()] = true;
+    // Verhindert, dass die Pfeiltasten die Seite scrollen.
+    if (e.key.startsWith("Arrow") || e.key === " ") e.preventDefault();
+    if (e.key === " " && vorbei) neustart();
+    // Dash starten (nur beim ersten Drücken, nicht beim Gedrückthalten).
+    if (e.key === "Shift" && !e.repeat && !vorbei && dashPause <= 0) {
+      dashZeit = 0.15;
+      dashPause = 1.2;
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    tasten[e.key.toLowerCase()] = false;
+  });
+
+  // 4) update: Hier ändert sich die Spielwelt. "dt" ist die Zeit seit dem letzten Bild.
+  function update(dt) {
+    if (vorbei) return; // Nach dem Aus bewegt sich nichts mehr.
+    ueberlebt += dt;
+    let dx = 0;
+    let dy = 0;
+    if (tasten["a"] || tasten["arrowleft"])  dx -= 1;
+    if (tasten["d"] || tasten["arrowright"]) dx += 1;
+    if (tasten["w"] || tasten["arrowup"])    dy -= 1;
+    if (tasten["s"] || tasten["arrowdown"])  dy += 1;
+
+    // Diagonal wäre sonst schneller (Satz des Pythagoras), deshalb normalisieren.
+    const laenge = Math.hypot(dx, dy);
+    if (laenge > 0) {
+      dx /= laenge;
+      dy /= laenge;
+    }
+
+    // Letzte Blickrichtung merken, damit der Dash auch im Stehen eine Richtung hat.
+    if (laenge > 0) richtung = { x: dx, y: dy };
+
+    // Dash: kurz dreimal so schnell in Blickrichtung, danach gibt es eine Wartezeit.
+    dashPause -= dt;
+    let tempo = spieler.tempo;
+    if (dashZeit > 0) {
+      dashZeit -= dt;
+      dx = richtung.x;
+      dy = richtung.y;
+      tempo = spieler.tempo * 3;
+    }
+
+    // Strecke = Geschwindigkeit mal Zeit. So läuft das Spiel auf jedem PC gleich schnell.
+    spieler.x += dx * tempo * dt;
+    spieler.y += dy * tempo * dt;
+
+    // Die Figur darf das Spielfeld nicht verlassen.
+    spieler.x = Math.max(spieler.radius, Math.min(canvas.width - spieler.radius, spieler.x));
+    spieler.y = Math.max(spieler.radius, Math.min(canvas.height - spieler.radius, spieler.y));
+
+    // Neue Gegner erscheinen immer schneller: Der Abstand schrumpft mit der Zeit.
+    zeitBisNeuerGegner -= dt;
+    if (zeitBisNeuerGegner <= 0) {
+      neuerGegner();
+      zeitBisNeuerGegner = Math.max(1, 2.2 - ueberlebt * 0.02);
+    }
+
+    for (const g of gegner) {
+      // Richtung zum Spieler: Unterschied der Positionen, auf Länge 1 gebracht.
+      const gx = spieler.x - g.x;
+      const gy = spieler.y - g.y;
+      const abstand = Math.hypot(gx, gy) || 1;
+      // Je mehr Punkte du gesichert hast, desto schneller werden die Gegner.
+      const t = g.tempo * (1 + punkte * 0.002);
+      g.x += (gx / abstand) * t * dt;
+      g.y += (gy / abstand) * t * dt;
+
+      // Treffer: Ist der Abstand kleiner als beide Radien zusammen, berühren sich die Kreise.
+      // Während des Dashs (dashZeit > 0) kann dich niemand treffen.
+      if (abstand < g.radius + spieler.radius && dashZeit <= 0) vorbei = true;
+    }
+
+    // Beute erscheint regelmäßig, aber nie mehr als drei Stücke gleichzeitig.
+    zeitBisNeueBeute -= dt;
+    if (zeitBisNeueBeute <= 0 && beute.length < 3) {
+      neueBeute();
+      zeitBisNeueBeute = 1.5;
+    }
+
+    // Einsammeln: dieselbe Kreisprüfung wie bei den Gegnern, nur mit gutem Ergebnis.
+    // Wir gehen rückwärts durch die Liste, weil wir beim Durchlaufen Einträge löschen.
+    for (let i = beute.length - 1; i >= 0; i--) {
+      const b = beute[i];
+      b.leben -= dt;
+      if (b.leben <= 0) { beute.splice(i, 1); continue; } // Zu spät: Beute verschwindet.
+      if (Math.hypot(spieler.x - b.x, spieler.y - b.y) < b.radius + spieler.radius) {
+        beute.splice(i, 1);
+        rucksack += 10; // Erst im Rucksack, noch nicht gesichert.
+      }
+    }
+
+    // Extraktion: kurz in der Zone stehen (zone.dauer), dann ist der Rucksack in Sicherheit.
+    if (Math.hypot(spieler.x - zone.x, spieler.y - zone.y) < zone.radius) {
+      if (rucksack > 0) extraktion += dt;
+      if (extraktion >= zone.dauer) {
+        punkte += rucksack;
+        rucksack = 0;
+        extraktion = 0;
+        meldung = 1.5;
+      }
+    } else {
+      extraktion = 0; // Zone verlassen: Fortschritt weg.
+    }
+    if (meldung > 0) meldung -= dt;
+
+    if (vorbei && punkte > bestwert) bestwert = punkte;
+  }
+
+  // 5) draw: Hier wird alles gezeichnet. Jedes Bild beginnt mit leerem Feld.
+  function draw() {
+    const farbe = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Raster als Orientierung, damit man die Bewegung besser sieht.
+    ctx.strokeStyle = farbe("--grid");
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= canvas.width; x += 50) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= canvas.height; y += 50) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    // Extraktionszone: Hier bringst du deine Beute in Sicherheit.
+    ctx.strokeStyle = "#3a8fd9";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.arc(zone.x, zone.y, zone.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (extraktion > 0) {
+      // Fortschrittsring: voll nach zone.dauer Sekunden.
+      ctx.beginPath();
+      ctx.arc(zone.x, zone.y, zone.radius, -Math.PI / 2, -Math.PI / 2 + (extraktion / zone.dauer) * Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Die Spielfigur als Kreis.
+    ctx.fillStyle = farbe("--player");
+    ctx.beginPath();
+    ctx.arc(spieler.x, spieler.y, spieler.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Beute in Grün.
+    ctx.fillStyle = "#3aa86b";
+    for (const b of beute) {
+      ctx.globalAlpha = Math.min(1, b.leben / 3); // Blendet in den letzten 3 Sekunden aus.
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Gegner in Rot.
+    ctx.fillStyle = "#d9483b";
+    for (const g of gegner) {
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, g.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Anzeige: überlebte Zeit.
+    ctx.fillStyle = farbe("--text");
+    ctx.font = "20px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Gesichert: " + punkte + "   Rucksack: " + rucksack, 16, 30);
+    ctx.textAlign = "right";
+    ctx.fillText("Bestwert: " + bestwert, canvas.width - 16, 30);
+
+    ctx.textAlign = "left";
+    ctx.fillText("Zeit: " + ueberlebt.toFixed(1) + " s", 16, 56);
+    ctx.fillText(dashPause > 0 ? "Dash: " + dashPause.toFixed(1) + " s" : "Dash bereit (Shift)", 16, canvas.height - 16);
+
+    if (meldung > 0) {
+      ctx.textAlign = "center";
+      ctx.font = "bold 28px sans-serif";
+      ctx.fillText("Extrahiert!", canvas.width / 2, 80);
+      ctx.font = "20px sans-serif";
+    }
+
+    if (vorbei) {
+      ctx.textAlign = "center";
+      ctx.font = "bold 40px sans-serif";
+      ctx.fillText("Erwischt!", canvas.width / 2, canvas.height / 2 - 10);
+      ctx.font = "20px sans-serif";
+      ctx.fillText("Gesichert: " + punkte + " Punkte. Im Rucksack verloren: " + rucksack + ". Leertaste für Neustart.", canvas.width / 2, canvas.height / 2 + 30);
+    }
+  }
+
+  // 6) Die Spielschleife: update und draw laufen immer wieder, ca. 60 Mal pro Sekunde.
+  let letzteZeit = performance.now();
+  function schleife(jetzt) {
+    const dt = Math.min((jetzt - letzteZeit) / 1000, 0.05); // Sekunden, mit Obergrenze
+    letzteZeit = jetzt;
+    update(dt);
+    draw();
+    requestAnimationFrame(schleife);
+  }
+  requestAnimationFrame(schleife);
+</script>
+</body>
+</html>
