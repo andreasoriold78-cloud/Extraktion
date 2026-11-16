@@ -1,0 +1,31 @@
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg: #eef0f2; --text: #1d2329; --muted: #5b6670; --line: #c4cbd1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0d1217; --text: #e3e7ea; --muted: #94a0aa; --line: #29313a; }
+}
+:root[data-theme="dark"] { --bg: #0d1217; --text: #e3e7ea; --muted: #94a0aa; --line: #29313a; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  display: flex; flex-direction: column; align-items: center; padding: 24px 16px; gap: 14px;
+}
+h1 { font-size: 1.25rem; margin: 0; font-weight: 600; }
+p { margin: 0; color: var(--muted); font-size: 0.95rem; text-align: center; max-width: 62ch; }
+#rahmen { width: 100%; display: flex; justify-content: center; }
+/* Das Spielfeld füllt das Fenster, behält aber sein Seitenverhältnis 16:10 */
+canvas {
+  width: min(100%, calc((100vh - 170px) * 1.6));
+  width: min(100%, calc((100dvh - 170px) * 1.6));
+  touch-action: none; aspect-ratio: 16 / 10; background: #0a0f14; border-radius: 12px; display: block;
+}
+#rahmen:fullscreen { align-items: center; background: #000; }
+#rahmen:fullscreen canvas { width: min(100vw, 160vh); border-radius: 0; }
+kbd { font: inherit; padding: 1px 7px; border: 1px solid var(--line); border-radius: 4px; }
+#vollbild { font: inherit; padding: 6px 16px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+.quer { display: none; }
+@media (orientation: portrait) and (max-width: 700px) { .quer { display: block; } }
