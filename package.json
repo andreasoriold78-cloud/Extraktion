@@ -1,0 +1,10 @@
+{
+  "name": "extraktion",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browserspiel mit 99 Leveln, Bossen, Shop und Synthwave-Musik",
+  "scripts": {
+    "test": "node --test",
+    "balance": "node tools/balance.js bericht ."
+  }
+}

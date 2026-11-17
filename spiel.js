@@ -12,7 +12,7 @@ function startLevel(i) {
   spieler.x = B / 2; spieler.y = H / 2;
   zone.x = B - 90; zone.y = H - 90;
   minen = []; zeitBisMine = 3; inZone = false;
-  leben = 1 + shop.leben; schildAn = shop.schild > 0; unverwundbar = 0; verdient = 0;
+  leben = 1 + shop.leben + (klasseAktuell().leben || 0); schildAn = shop.schild > 0; unverwundbar = 0; verdient = 0;
   welleCd = 0; welleR = 0; kraft = []; zeitBisKraft = 12; effekte = { zeit: 0, tempo: 0 };
   lvlTreffer = 0; lvlKrafte = 0; kugeln = []; windX = 0; windY = 0; windZeit = 0; padCd = 0; welleBoss = false;
   const cf = cfgAktuell();
@@ -39,26 +39,28 @@ function neuerGegner() {
   else if (seite === 1) { x = B + 30; y = rnd() * H; }
   else if (seite === 2) { x = rnd() * B; y = H + 30; }
   else                  { x = -30; y = rnd() * H; }
-  const typ = cfg.typen[Math.floor(rnd() * cfg.typen.length)];
+  const liste = ev().geist && !cfg.boss ? cfg.typen.concat("geist") : cfg.typen;
+  const typ = liste[Math.floor(rnd() * liste.length)];
   const art = gegnerArten[typ];
-  gegner.push({ x, y, typ, radius: art.radius, tempo: art.tempo * (0.85 + rnd() * 0.3) * cfg.tempo * sd().tempo, cd: 1.5 + rnd() * 1.5, dash: 0 });
+  gegner.push({ x, y, typ, radius: art.radius, tempo: art.tempo * (0.85 + rnd() * 0.3) * cfg.tempo * sd().tempo * (ev().tempo || 1), cd: 1.5 + rnd() * 1.5, dash: 0 });
 }
 
 function neueBeute() {
   const cfg = cfgAktuell();
-  const gold = !cfg.boss && rnd() < 0.08; // Selten: goldene Beute, die schnell verschwindet
+  const gold = !cfg.boss && rnd() < 0.08 + 0.02 * talente.sammler; // Selten: goldene Beute, die schnell verschwindet
   beute.push({
     x: 40 + rnd() * (B - 80),
     y: 40 + rnd() * (H - 80),
     radius: gold ? 11 : 9,
     gold,
-    leben: gold ? 4 : cfg.beuteLeben,
+    leben: gold ? 4 : cfg.beuteLeben + talente.sammler,
     versatz: Math.random() * 6 // Damit nicht alle im Gleichtakt pulsieren
   });
 }
 
 // Funken: kleine Teilchen, die in alle Richtungen fliegen und verblassen.
 function funken(x, y, farbe, anzahl) {
+  if (einst.sparmodus) anzahl = Math.ceil(anzahl * 0.4); // Sparmodus: weniger Teilchen
   for (let i = 0; i < anzahl; i++) {
     const winkel = Math.random() * Math.PI * 2;
     const tempo = 60 + Math.random() * 200;
@@ -102,13 +104,13 @@ function schuss(x, y, winkel, tempo) { kugeln.push({ x, y, vx: Math.cos(winkel) 
 function bossUpdate(dt, cfg) {
   const b = boss;
   const gx = spieler.x - b.x, gy = spieler.y - b.y, ab = Math.hypot(gx, gy) || 1;
-  b.x += gx / ab * b.tempo * dt;
-  b.y += gy / ab * b.tempo * dt;
+  b.x += gx / ab * b.tempo * (cfg.m || 1) * dt;
+  b.y += gy / ab * b.tempo * (cfg.m || 1) * dt;
   b.cd -= dt;
   const hp = 1 - punkte / cfg.ziel;
   if (b.cd <= 0) { // Jeder Boss hat eins von drei Angriffsmustern, in der zweiten Hälfte schneller
-    b.cd = Math.max(1.2, 2.8 - cfg.boss * 0.12) * (hp < 0.5 ? 0.75 : 1);
-    const n = 10 + cfg.boss, t = 130 + cfg.boss * 6;
+    b.cd = Math.max(1.2, 2.8 - cfg.boss * 0.12) / (cfg.m || 1) * (hp < 0.5 ? 0.75 : 1);
+    const n = 10 + cfg.boss, t = (130 + cfg.boss * 6) * (cfg.m || 1);
     if (b.art === 0) for (let i = 0; i < n; i++) schuss(b.x, b.y, i / n * Math.PI * 2, t);                 // Ring
     else if (b.art === 1) { const w = Math.atan2(gy, gx); for (let i = -2; i <= 2; i++) schuss(b.x, b.y, w + i * 0.22, t + 50); } // Fächer
     else { b.drehung += 0.4; for (let i = 0; i < 8; i++) schuss(b.x, b.y, b.drehung + i * Math.PI / 4, t + 10); }   // Drehender Ring
@@ -119,7 +121,7 @@ function bossUpdate(dt, cfg) {
 
 function sichern(n) { // Gesicherte Beute zählt als Punkte und bringt Münzen
   punkte += n;
-  const m = n / 10 * sd().muenzen;
+  const m = n / 10 * sd().muenzen * (ev().muenzen || 1) * (1 + 0.1 * talente.wirt);
   muenzen += m;
   verdient += m;
   stats.muenzenGesamt += m;
@@ -129,21 +131,21 @@ function sichern(n) { // Gesicherte Beute zählt als Punkte und bringt Münzen
 function getroffen() {
   lvlTreffer++;
   if (schildAn) { // Das Schild fängt den Treffer ab
-    schildAn = false; unverwundbar = 1.5;
+    schildAn = false; unverwundbar = 1.5 + 0.4 * talente.haut;
     klang.schild();
     funken(spieler.x, spieler.y, "#3aa0ff", 25);
     return;
   }
   leben--;
   if (leben <= 0) { sterben(); return; }
-  unverwundbar = 1.5; wackeln = 0.25; // Kurz unverwundbar, damit nicht gleich der nächste trifft
+  unverwundbar = 1.5 + 0.4 * talente.haut; wackeln = 0.25; // Kurz unverwundbar, damit nicht gleich der nächste trifft
   klang.treffer();
   funken(spieler.x, spieler.y, "#ff4d5e", 25);
 }
 
 function welleStarten() {
-  if (shop.welle < 1 || welleCd > 0) return;
-  welleCd = 14 - shop.welle * 2;
+  if (ws() < 1 || welleCd > 0) return;
+  welleCd = 14 - ws() * 2;
   welleX = spieler.x; welleY = spieler.y; welleR = 1;
   welleBoss = false;
   stats.wellen++;
@@ -200,7 +202,7 @@ function update(dt) {
   if (laenge > 0.1) { const l2 = Math.hypot(dx, dy); richtung = { x: dx / l2, y: dy / l2 }; }
 
   dashPause -= dt;
-  let tempo = spieler.tempo * (1 + 0.04 * shop.schuhe) * (effekte.tempo > 0 ? 1.4 : 1);
+  let tempo = spieler.tempo * (1 + 0.04 * shop.schuhe) * (effekte.tempo > 0 ? 1.4 : 1) * klasseAktuell().tempo;
   if (dashZeit > 0) {
     dashZeit -= dt;
     dx = richtung.x; dy = richtung.y;
@@ -262,7 +264,7 @@ function update(dt) {
     b.leben -= dt;
     if (b.leben <= 0) { beute.splice(i, 1); continue; }
     const bx = spieler.x - b.x, by = spieler.y - b.y, bd = Math.hypot(bx, by) || 1;
-    if (shop.magnet > 0 && bd < 70 + 45 * shop.magnet) { b.x += bx / bd * 240 * dt; b.y += by / bd * 240 * dt; } // Magnet
+    if (mg() > 0 && bd < 70 + 45 * mg()) { b.x += bx / bd * 240 * dt; b.y += by / bd * 240 * dt; } // Magnet
 
     if (Math.hypot(spieler.x - b.x, spieler.y - b.y) < b.radius + spieler.radius) {
       beute.splice(i, 1);
@@ -275,7 +277,7 @@ function update(dt) {
   }
 
   // Wind, Teleporter-Pads, Walzen, Kugeln und Boss
-  if (cfg.wind) {
+  if (cfg.wind || ev().wind) {
     windZeit -= dt;
     if (windZeit <= 0) { const w = rnd() * Math.PI * 2; windX = Math.cos(w) * 55; windY = Math.sin(w) * 55; windZeit = 5 + rnd() * 3; }
   }
@@ -342,11 +344,12 @@ function update(dt) {
     }
     for (let i = kugeln.length - 1; i >= 0; i--) if (Math.hypot(kugeln[i].x - welleX, kugeln[i].y - welleY) < welleR) kugeln.splice(i, 1); // Löscht Kugeln
     if (boss && !welleBoss && Math.hypot(boss.x - welleX, boss.y - welleY) < welleR + boss.radius) { welleBoss = true; sichern(10); funken(boss.x, boss.y, "#8ff", 20); } // Schadet dem Boss
-    if (welleR > 130 + shop.welle * 35) welleR = 0;
+    if (welleR > 130 + ws() * 35) welleR = 0;
   }
 
   // Minen: erst ein Warnkreis, dann die Explosion
-  if (cfg.minen) {
+  const mi = cfg.minen || ev().minen;
+  if (mi) {
     zeitBisMine -= dt;
     if (zeitBisMine <= 0) {
       minen.push({
@@ -354,7 +357,7 @@ function update(dt) {
         y: Math.max(60, Math.min(H - 60, spieler.y + (rnd() - 0.5) * 300)),
         t: 0
       });
-      zeitBisMine = cfg.minen;
+      zeitBisMine = mi;
       klang.warn();
     }
   }

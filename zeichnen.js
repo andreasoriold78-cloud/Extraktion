@@ -6,7 +6,7 @@ function figur(form, x, y, r, farbe, glanz, winkel) {
   ctx.translate(x, y);
   ctx.rotate(winkel);
   ctx.shadowColor = farbe;
-  ctx.shadowBlur = glanz * skala;
+  ctx.shadowBlur = glanz * glow;
   ctx.fillStyle = farbe;
   ctx.beginPath();
   if (form === "kreis") ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -26,7 +26,7 @@ function figur(form, x, y, r, farbe, glanz, winkel) {
 
 function kreis(x, y, r, farbe, glanz) {
   ctx.shadowColor = farbe;
-  ctx.shadowBlur = (glanz) * skala;
+  ctx.shadowBlur = (glanz) * glow;
   ctx.fillStyle = farbe;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -39,7 +39,7 @@ function zeichneWelt(zeit, cfg) {
     ctx.strokeStyle = "#c58bff";
     ctx.lineWidth = 3;
     ctx.shadowColor = "#c58bff";
-    ctx.shadowBlur = 14 * skala;
+    ctx.shadowBlur = 14 * glow;
     ctx.setLineDash([5, 8]);
     ctx.beginPath(); ctx.moveTo(pads[0].x, pads[0].y); ctx.lineTo(pads[1].x, pads[1].y); ctx.stroke();
     ctx.setLineDash([]);
@@ -48,7 +48,7 @@ function zeichneWelt(zeit, cfg) {
   }
   for (const w of walzen) {
     ctx.shadowColor = "#ff7a2e";
-    ctx.shadowBlur = 12 * skala;
+    ctx.shadowBlur = 12 * glow;
     ctx.fillStyle = "#ff7a2e";
     ctx.fillRect(w.x, w.y, w.b, w.h);
     ctx.shadowBlur = 0;
@@ -85,7 +85,7 @@ function zeichneExtras(cfg) {
   ctx.fillStyle = "#e3e7ea";
   ctx.font = "18px sans-serif";
   if (modus === "endlos") ctx.fillText("Zeit: " + Math.floor(zeitImLevel) + " s", 16, 90);
-  if (cfg.wind) {
+  if (cfg.wind || ev().wind) {
     ctx.save();
     ctx.translate(B - 70, 150);
     ctx.rotate(Math.atan2(windY, windX));
@@ -109,7 +109,7 @@ function zeichneExtras(cfg) {
     ctx.textAlign = "center";
     ctx.font = "bold 16px sans-serif";
     for (const b of tasteKnoepfe()) {
-      if (b.k === "welle" && shop.welle < 1) continue;
+      if (b.k === "welle" && ws() < 1) continue;
       ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
       ctx.fillText(b.k === "dash" ? "Dash" : b.k === "welle" ? "Welle" : "II", b.x, b.y + 5);
     }
@@ -159,7 +159,7 @@ function zeichneIntro(zeit) {
   ctx.textAlign = "center";
   ctx.globalAlpha = einblenden(0.3);
   ctx.shadowColor = "#ffb02e";
-  ctx.shadowBlur = (20) * skala;
+  ctx.shadowBlur = (20) * glow;
   ctx.fillStyle = "#ffb02e";
   ctx.font = "bold 52px sans-serif";
   ctx.fillText("EXTRAKTION", B / 2, 90);
@@ -176,7 +176,7 @@ function zeichneIntro(zeit) {
   ctx.strokeStyle = "#3aa0ff";
   ctx.lineWidth = 3;
   ctx.shadowColor = "#3aa0ff";
-  ctx.shadowBlur = (16) * skala;
+  ctx.shadowBlur = (16) * glow;
   ctx.beginPath(); ctx.arc(700, 410, 42, 0, Math.PI * 2); ctx.stroke();
   kreis(px, 410, 14, "#ffb02e", 18);
   kreis(px - 110 + f * 50, 410, 12, "#ff4d5e", 18);
@@ -231,7 +231,7 @@ function zeichneMenue(zeit) {
   ctx.fillRect(0, 0, B, H);
   ctx.textAlign = "center";
   ctx.shadowColor = "#ffb02e";
-  ctx.shadowBlur = (18 + Math.sin(zeit * 3) * 8) * skala;
+  ctx.shadowBlur = (18 + Math.sin(zeit * 3) * 8) * glow;
   ctx.fillStyle = "#ffb02e";
   ctx.font = "bold 44px sans-serif";
   ctx.fillText("EXTRAKTION", B / 2, 58);
@@ -240,14 +240,16 @@ function zeichneMenue(zeit) {
   ctx.font = "16px sans-serif";
   ctx.fillText("Level " + (seite * 10 + 1) + " bis " + Math.min(levels.length, seite * 10 + 10), 240, 96);
   ctx.fillText("Modi", 615, 98);
+  ctx.font = "13px sans-serif";
+  ctx.fillText("Event der Woche: " + eventAktiv.name + ". " + eventAktiv.info, B / 2, 72);
   const aktionen = {
     endlos: ["Endlosmodus", endlosBest ? "Best " + Math.floor(endlosBest) + " s" : ""],
     tages: ["Tageschallenge", tagesBest[tagKey] ? "heute " + tagesBest[tagKey].toFixed(1) + " s" : "neu"],
     shopknopf: ["Shop", Math.floor(muenzen) + " Münzen"],
     erfolge: ["Erfolge", Object.keys(erreicht).length + "/" + erfolgeListe.length],
     optionen: ["Einstellungen", ""],
-    intro: ["Intro", "ansehen"],
-    outro: ["Outro", "ansehen"]
+    klasse: ["Klasse", klasseAktuell().name],
+    talente: ["Talente", talentPunkte() + " frei"]
   };
   menuePunkte().forEach((p, nr) => {
     if (p.art === "seite") zeile(p, nr, p.d < 0 ? "<" : ">", "", "#fff", false);
@@ -266,18 +268,20 @@ function zeichneOptionen() {
   ctx.fillRect(0, 0, B, H);
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffb02e";
-  ctx.font = "bold 34px sans-serif";
-  ctx.fillText("EINSTELLUNGEN", B / 2, 60);
-  const label = { volSound: "Soundeffekte", volMusik: "Musik", schwer: "Schwierigkeit", farbenblind: "Farbenblind-Modus", touch: "Touch-Steuerung", zurueck: "Zurück" };
+  ctx.font = "bold 30px sans-serif";
+  ctx.fillText("EINSTELLUNGEN", B / 2, 50);
+  const label = { volSound: "Soundeffekte", volMusik: "Musik", schwer: "Schwierigkeit", farbenblind: "Farbenblind-Modus", sparmodus: "Sparmodus (weniger Effekte)", touch: "Touch-Steuerung", tutorial: "Tutorial", intro: "Intro", outro: "Outro", zurueck: "Zurück" };
   optPunkte().forEach((p, nr) => {
     const wert = p.k === "volSound" || p.k === "volMusik" ? Math.round(einst[p.k] * 100) + " %"
-      : p.k === "schwer" ? schwerTab[einst.schwer].name : p.k === "zurueck" ? "Esc" : einst[p.k] ? "an" : "aus";
-    zeile(p, nr, label[p.k], wert, "#3dffa0", false);
+      : p.k === "schwer" ? schwerTab[einst.schwer].name
+      : p.k === "tutorial" || p.k === "intro" || p.k === "outro" ? "ansehen"
+      : p.k === "zurueck" ? "Esc" : einst[p.k] ? "an" : "aus";
+    zeile(p, nr, label[p.k], wert, p.k === "tutorial" || p.k === "intro" || p.k === "outro" ? "#ffb02e" : "#3dffa0", false);
   });
   ctx.textAlign = "center";
   ctx.fillStyle = "#94a0aa";
-  ctx.font = "15px sans-serif";
-  ctx.fillText("Links und Rechts ändern den Wert. Schwer gibt mehr Münzen, Leicht weniger. M schaltet alles stumm.", B / 2, 450);
+  ctx.font = "14px sans-serif";
+  ctx.fillText("Links und Rechts ändern den Wert. Schwer gibt mehr Münzen. M schaltet alles stumm.", B / 2, 478);
 }
 
 function zeichneErfolge() {
@@ -294,6 +298,98 @@ function zeichneErfolge() {
   ctx.font = "15px sans-serif";
   ctx.fillText(sel ? sel.e.info : "", B / 2, 450);
   ctx.fillText("Esc: zurück", B / 2, 478);
+}
+
+function zeichneKlasse() {
+  ctx.fillStyle = "rgba(6, 10, 14, 0.85)";
+  ctx.fillRect(0, 0, B, H);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffb02e";
+  ctx.font = "bold 34px sans-serif";
+  ctx.fillText("KLASSE", B / 2, 52);
+  ctx.fillStyle = "#e3e7ea";
+  ctx.font = "18px sans-serif";
+  ctx.fillText("Münzen: " + Math.floor(muenzen), B / 2, 80);
+  klassePunkte().forEach((p, nr) => {
+    const habe = klassenBesitz.includes(p.k.id), aktiv = klasseAktiv === p.k.id;
+    ctx.fillStyle = nr === auswahl ? "rgba(255, 176, 46, 0.18)" : "rgba(255, 255, 255, 0.05)";
+    ctx.fillRect(p.x, p.y, p.b, p.h);
+    if (nr === auswahl) { ctx.strokeStyle = "#ffb02e"; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.b, p.h); }
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#e3e7ea";
+    ctx.font = "bold 20px sans-serif";
+    ctx.fillText(p.k.name, p.x + 16, p.y + 32);
+    ctx.fillStyle = "#94a0aa";
+    ctx.font = "14px sans-serif";
+    const worte = p.k.info.split(" "); let zl = "", y = p.y + 58;
+    for (const w of worte) { if ((zl + w).length > 38) { ctx.fillText(zl, p.x + 16, y); zl = ""; y += 18; } zl += w + " "; }
+    ctx.fillText(zl, p.x + 16, y);
+    ctx.textAlign = "right";
+    ctx.font = "bold 16px sans-serif";
+    ctx.fillStyle = aktiv ? "#ffb02e" : habe ? "#3dffa0" : muenzen >= p.k.preis ? "#3dffa0" : "#ff4d5e";
+    ctx.fillText(aktiv ? "aktiv" : habe ? "wählen" : p.k.preis + " M", p.x + p.b - 16, p.y + 32);
+  });
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#94a0aa";
+  ctx.font = "14px sans-serif";
+  ctx.fillText("Esc: zurück", B / 2, 478);
+}
+
+function zeichneTalente() {
+  ctx.fillStyle = "rgba(6, 10, 14, 0.85)";
+  ctx.fillRect(0, 0, B, H);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffb02e";
+  ctx.font = "bold 34px sans-serif";
+  ctx.fillText("TALENTE", B / 2, 52);
+  ctx.fillStyle = "#e3e7ea";
+  ctx.font = "18px sans-serif";
+  ctx.fillText("Freie Punkte: " + talentPunkte(), B / 2, 80);
+  talentZeilen().forEach((p, nr) => {
+    const stufe = talente[p.t.id];
+    ctx.fillStyle = nr === auswahl ? "rgba(255, 176, 46, 0.18)" : "rgba(255, 255, 255, 0.05)";
+    ctx.fillRect(p.x, p.y, p.b, p.h);
+    if (nr === auswahl) { ctx.strokeStyle = "#ffb02e"; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.b, p.h); }
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#e3e7ea";
+    ctx.font = "bold 19px sans-serif";
+    ctx.fillText(p.t.name, p.x + 16, p.y + 26);
+    ctx.fillStyle = "#94a0aa";
+    ctx.font = "14px sans-serif";
+    ctx.fillText(p.t.info, p.x + 16, p.y + 48);
+    for (let i = 0; i < 3; i++) { // Drei Stufen als Kreise
+      ctx.fillStyle = i < stufe ? "#3dffa0" : "#2a343e";
+      ctx.beginPath(); ctx.arc(p.x + p.b - 120 + i * 30, p.y + 24, 9, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.textAlign = "right";
+    ctx.font = "14px sans-serif";
+    ctx.fillStyle = stufe >= 3 ? "#5b6670" : talentPunkte() >= stufe + 1 ? "#3dffa0" : "#ff4d5e";
+    ctx.fillText(stufe >= 3 ? "max" : "Kosten: " + (stufe + 1) + " P", p.x + p.b - 16, p.y + 50);
+  });
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#94a0aa";
+  ctx.fillText("Esc: zurück", B / 2, 478);
+}
+
+function zeichneTutorial() {
+  ctx.fillStyle = "rgba(6, 10, 14, 0.88)";
+  ctx.fillRect(0, 0, B, H);
+  const sz = tutSeiten[tutSeite];
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffb02e";
+  ctx.font = "bold 36px sans-serif";
+  ctx.fillText(sz[0], B / 2, 130);
+  ctx.fillStyle = "#e3e7ea";
+  ctx.font = "20px sans-serif";
+  ctx.fillText(sz[1], B / 2, 210);
+  ctx.fillText(sz[2], B / 2, 250);
+  for (let i = 0; i < tutSeiten.length; i++) { // Seitenpunkte
+    ctx.fillStyle = i === tutSeite ? "#ffb02e" : "#3b444c";
+    ctx.beginPath(); ctx.arc(B / 2 - 45 + i * 30, 330, 6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "#94a0aa";
+  ctx.font = "16px sans-serif";
+  ctx.fillText(tutSeite < tutSeiten.length - 1 ? "Leertaste oder Tippen: weiter" : "Leertaste oder Tippen: los geht's", B / 2, 400);
 }
 
 function zeichneShop(zeit) {
@@ -338,6 +434,7 @@ function zeichneShop(zeit) {
 
 function draw(zeit) {
   const cfg = cfgAktuell();
+  glow = einst.sparmodus ? 0 : skala; // Sparmodus: keine Leuchteffekte
   ctx.setTransform(canvas.width / B, 0, 0, canvas.height / H, 0, 0); // Ab hier rechnen wir in 800 x 500
   ctx.clearRect(0, 0, B, H);
   ctx.save();
@@ -357,7 +454,7 @@ function draw(zeit) {
 
   // Schwebeteilchen im Hintergrund
   ctx.fillStyle = th.punkt;
-  for (const st of sterne) {
+  for (const st of einst.sparmodus ? [] : sterne) {
     ctx.globalAlpha = 0.25 + 0.25 * Math.sin(zeit * 2 + st.x);
     ctx.fillRect(st.x, st.y, st.s, st.s);
   }
@@ -367,7 +464,7 @@ function draw(zeit) {
   if (cfg.extraktion) {
     const r = zone.radius * (1 + Math.sin(zeit * 4) * 0.04);
     ctx.shadowColor = "#3aa0ff";
-    ctx.shadowBlur = (22) * skala;
+    ctx.shadowBlur = (22) * glow;
     ctx.fillStyle = "rgba(58, 160, 255, 0.10)";
     ctx.beginPath(); ctx.arc(zone.x, zone.y, r, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = "#3aa0ff";
@@ -395,7 +492,7 @@ function draw(zeit) {
     const f = kraftFarbe[kr.art];
     ctx.globalAlpha = Math.min(1, kr.leben / 2);
     ctx.shadowColor = f;
-    ctx.shadowBlur = 18 * skala;
+    ctx.shadowBlur = 18 * glow;
     ctx.strokeStyle = f;
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(kr.x, kr.y, 14 + Math.sin(zeit * 6) * 2, 0, Math.PI * 2); ctx.stroke();
@@ -407,7 +504,7 @@ function draw(zeit) {
   }
   ctx.globalAlpha = 1;
   if (welleR > 0) { // Schockwelle
-    ctx.globalAlpha = Math.max(0, 1 - welleR / (130 + shop.welle * 35));
+    ctx.globalAlpha = Math.max(0, 1 - welleR / (130 + ws() * 35));
     ctx.strokeStyle = "#8ff";
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(welleX, welleY, welleR, 0, Math.PI * 2); ctx.stroke();
@@ -415,7 +512,7 @@ function draw(zeit) {
   }
   for (const m of minen) { // Warnkreis wächst, dann knallt es
     ctx.shadowColor = "#ff7a2e";
-    ctx.shadowBlur = (14) * skala;
+    ctx.shadowBlur = (14) * glow;
     ctx.strokeStyle = "#ff7a2e";
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.4 + 0.5 * Math.abs(Math.sin(zeit * 12));
@@ -443,7 +540,7 @@ function draw(zeit) {
     figur(sk.form, spieler.x, spieler.y, spieler.radius, spielerFarbe(zeit), dashZeit > 0 ? 30 : 18, skinWinkel(sk.form, zeit));
     if (schildAn) { // Schildring
       ctx.shadowColor = "#3aa0ff";
-      ctx.shadowBlur = 14 * skala;
+      ctx.shadowBlur = 14 * glow;
       ctx.strokeStyle = "#3aa0ff";
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(spieler.x, spieler.y, spieler.radius + 7, 0, Math.PI * 2); ctx.stroke();
@@ -460,7 +557,7 @@ function draw(zeit) {
     ctx.fillRect(t.x - 1.5, t.y - 1.5, 3, 3);
   }
   ctx.globalAlpha = 1;
-  if (cfg.dunkel && phase === "spielen") { // Nur ein Lichtkegel um dich herum
+  if ((cfg.dunkel || ev().dunkel) && phase === "spielen") { // Nur ein Lichtkegel um dich herum
     const licht = ctx.createRadialGradient(spieler.x, spieler.y, 90, spieler.x, spieler.y, 270);
     licht.addColorStop(0, "rgba(3, 5, 9, 0)");
     licht.addColorStop(1, "rgba(3, 5, 9, 0.78)");
@@ -474,6 +571,9 @@ function draw(zeit) {
   if (phase === "shop") { zeichneShop(zeit); return; }
   if (phase === "optionen") { zeichneOptionen(); return; }
   if (phase === "erfolge") { zeichneErfolge(); return; }
+  if (phase === "klasse") { zeichneKlasse(); return; }
+  if (phase === "talente") { zeichneTalente(); return; }
+  if (phase === "tutorial") { zeichneTutorial(); return; }
   if (phase === "intro") { zeichneIntro(zeit); return; }
   if (phase === "outro") { zeichneOutro(); return; }
 
@@ -493,7 +593,7 @@ function draw(zeit) {
   ctx.fillText(dashPause > 0 ? "Dash: " + dashPause.toFixed(1) + " s" : "Dash bereit (Shift)", B - 16, 30);
   ctx.fillText("Münzen: " + Math.floor(muenzen), B - 16, 54);
   ctx.fillText("Leben: " + leben + (schildAn ? " + Schild" : ""), B - 16, 78);
-  if (shop.welle > 0) ctx.fillText(welleCd > 0 ? "Welle: " + welleCd.toFixed(1) + " s" : "Welle bereit (E)", B - 16, 102);
+  if (ws() > 0) ctx.fillText(welleCd > 0 ? "Welle: " + welleCd.toFixed(1) + " s" : "Welle bereit (E)", B - 16, 102);
   ctx.textAlign = "center";
   ctx.fillStyle = "#c58bff";
   if (effekte.zeit > 0) ctx.fillText("Zeitlupe " + effekte.zeit.toFixed(1) + " s", B / 2, H - 16);

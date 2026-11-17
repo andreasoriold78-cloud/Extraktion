@@ -1,4 +1,4 @@
-// Menü: Levelauswahl, Einstellungen, Erfolge und Shop (Logik, nicht das Zeichnen).
+// Menü: Levelauswahl, Einstellungen, Klassen, Talente, Erfolge und Shop (Logik, nicht das Zeichnen).
 
 // Menü: links die Level, rechts die Einstellungen.
 const SEITEN = Math.ceil(levels.length / 10);
@@ -14,17 +14,19 @@ function menuePunkte() {
     const i = seite * 10 + k;
     if (i < levels.length) liste.push({ art: "level", i, x: 40, y: 108 + k * 35, b: 400, h: 31 });
   }
-  ["endlos", "tages", "shopknopf", "erfolge", "optionen", "intro", "outro"].forEach((k, i) => liste.push({ art: "aktion", k, x: 470, y: 108 + i * 46, b: 290, h: 38 }));
+  ["endlos", "tages", "klasse", "talente", "shopknopf", "erfolge", "optionen"].forEach((k, i) => liste.push({ art: "aktion", k, x: 470, y: 108 + i * 46, b: 290, h: 38 }));
   return liste;
 }
 
 function menueAktion(nr) {
   const p = menuePunkte()[nr];
+  if (!p) return;
   if (p.art === "seite") { seiteWechseln(p.d); return; }
   if (p.art === "level") {
     if (p.i >= freigeschaltet) { klang.gesperrt(); return; }
     tode = 0; gesamtZeit = 0; klang.start();
     modus = "level";
+    if (!einst.tutorial && p.i === 0) { tutSeite = 0; tutNachStart = true; phase = "tutorial"; return; } // Beim ersten Start: Tutorial
     startLevel(p.i);
     return;
   }
@@ -34,22 +36,64 @@ function menueAktion(nr) {
   else if (p.k === "shopknopf") { phase = "shop"; auswahl = 0; }
   else if (p.k === "erfolge") { phase = "erfolge"; auswahl = 0; }
   else if (p.k === "optionen") { phase = "optionen"; auswahl = 0; }
-  else { szeneZeit = 0; phase = p.k; } // Intro oder Outro ansehen
+  else if (p.k === "klasse") { phase = "klasse"; auswahl = 0; }
+  else if (p.k === "talente") { phase = "talente"; auswahl = 0; }
 }
 
 // Einstellungen: Lautstärken, Schwierigkeit, Farbenblind-Modus, Touch-Steuerung
 function optPunkte() {
-  return ["volSound", "volMusik", "schwer", "farbenblind", "touch", "zurueck"].map((k, i) => ({ art: "opt", k, x: 180, y: 110 + i * 52, b: 440, h: 42 }));
+  return ["volSound", "volMusik", "schwer", "farbenblind", "sparmodus", "touch", "tutorial", "intro", "outro", "zurueck"].map((k, i) => ({ art: "opt", k, x: 180, y: 80 + i * 38, b: 440, h: 34 }));
 }
 
 function optAktion(nr, d) {
   const p = optPunkte()[nr];
+  if (!p) return;
   if (p.k === "zurueck") { phase = "menue"; auswahl = 0; klang.start(); return; }
+  if (p.k === "tutorial") { tutSeite = 0; tutNachStart = false; phase = "tutorial"; klang.start(); return; }
+  if (p.k === "intro" || p.k === "outro") { szeneZeit = 0; phase = p.k; klang.start(); return; }
   if (p.k === "volSound" || p.k === "volMusik") einst[p.k] = Math.round(((einst[p.k] + 0.1 * d + 1.1) % 1.1) * 10) / 10; // 0 bis 100 Prozent
   else if (p.k === "schwer") einst.schwer = (einst.schwer + d + 3) % 3;
   else einst[p.k] = !einst[p.k];
   speichern();
   klang.start();
+}
+
+// Klassen: Einmalig kaufen, danach jederzeit wechseln
+function klassePunkte() {
+  return klassen.map((k, i) => ({ art: "klasse", k, x: 60 + (i % 2) * 340, y: 110 + Math.floor(i / 2) * 130, b: 320, h: 110 }));
+}
+
+function klasseAktion(nr) {
+  const p = klassePunkte()[nr];
+  if (!p) return;
+  if (klassenBesitz.includes(p.k.id)) klasseAktiv = p.k.id;
+  else if (muenzen >= p.k.preis) { muenzen -= p.k.preis; klassenBesitz.push(p.k.id); klasseAktiv = p.k.id; klang.kauf(); stats.kaeufe++; erfolgePruefen(); }
+  else { klang.gesperrt(); return; }
+  klang.start();
+  speichern();
+}
+
+// Talente: Punkte gibt es für jedes erstmals geschaffte Level und doppelt für Bosse
+function talentZeilen() {
+  return talentListe.map((t, i) => ({ art: "talent", t, x: 100, y: 110 + i * 78, b: 600, h: 64 }));
+}
+
+function talentAktion(nr) {
+  const p = talentZeilen()[nr];
+  if (!p) return;
+  const stufe = talente[p.t.id];
+  if (stufe >= 3 || talentPunkte() < stufe + 1) { klang.gesperrt(); return; }
+  talente[p.t.id]++;
+  klang.kauf();
+  speichern();
+}
+
+function tutorialWeiter() {
+  if (tutSeite < tutSeiten.length - 1) { tutSeite++; klang.tick(); return; }
+  einst.tutorial = true;
+  speichern();
+  if (tutNachStart) { tutNachStart = false; modus = "level"; startLevel(0); }
+  else { phase = "menue"; auswahl = 0; }
 }
 
 function erfolgePunkte() {
@@ -80,6 +124,7 @@ function shopPunkte() {
 
 function shopAktion(nr) {
   const p = shopPunkte()[nr];
+  if (!p) return;
   if (p.art === "zurueck") { phase = "menue"; auswahl = 0; klang.start(); return; }
   if (p.art === "up") {
     const stufe = shop[p.u.id];

@@ -1,4 +1,4 @@
-// Daten: Level, Gegnertypen, Hintergründe, Shop-Upgrades, Skins und Erfolge.
+// Daten: Level, Gegnertypen, Hintergründe, Shop, Skins, Klassen, Talente, Tutorial und Erfolge.
 // Hier änderst du Zahlen und Texte, ohne die Spielregeln anzufassen.
 
 // Level als Daten: Ein neues Level ist einfach ein neuer Eintrag in dieser Liste.
@@ -28,6 +28,32 @@ const levelListe = [
 
 // 99 Level: Die zehn handgemachten wiederholen sich als "Runden", jede Runde etwas schwerer.
 // Ab Runde 3 kommen Geister dazu, Level 99 ist das große Finale.
+// Feinjustierung pro Level (aus dem Balancing-Bot): über 1 = schwerer, unter 1 = leichter
+const feinjustierung = [1.03, 0.81, 0.85, 0.64, 0.7, 0.55, 0.55, 0.68, 0.57, 1.29, 0.8, 0.76, 0.86, 0.68, 0.68, 0.55, 0.55, 0.71, 0.6, 1.51, 0.8, 0.76, 0.86, 0.69, 0.68, 0.75, 0.56, 0.79, 0.7, 1.6, 0.97, 0.94, 1.2, 0.81, 0.73, 1.08, 0.84, 0.87, 0.87, 1.6, 1.03, 0.96, 1.2, 1.1, 0.75, 1.08, 0.87, 0.9, 0.93, 1.6, 1.05, 1.05, 1.21, 1.14, 0.77, 1.06, 0.94, 0.9, 0.95, 1.6, 1.05, 1.05, 1.21, 1.15, 0.77, 1.05, 0.96, 0.91, 1.01, 1.6, 1.05, 1.05, 1.21, 1.19, 0.77, 1.06, 1.19, 1.23, 1.32, 1.6, 1.2, 1.34, 1.52, 1.53, 0.96, 1.33, 1.25, 1.23, 1.34, 1.6, 1.26, 1.35, 1.56, 1.54, 0.97, 1.35, 1.23, 1.19, 1.47];
+
+// Klassen: Jede spielt sich anders und kostet einmalig Münzen
+const klassen = [
+  { id: "standard", name: "Allrounder", preis: 0,   info: "Ausgewogen, ohne Besonderheiten.", tempo: 1, dash: 1, leben: 0 },
+  { id: "sprinter", name: "Sprinter",   preis: 150, info: "10 % schneller, der Dash lädt viel schneller.", tempo: 1.1, dash: 0.6, leben: 0 },
+  { id: "tank",     name: "Tank",       preis: 150, info: "Ein Leben mehr, aber etwas langsamer.", tempo: 0.92, dash: 1, leben: 1 },
+  { id: "tech",     name: "Techniker",  preis: 200, info: "Schockwelle und Magnet von Anfang an.", tempo: 1, dash: 1, leben: 0, welle: 1, magnet: 1 }
+];
+
+// Talente: Vier Pfade mit je drei Stufen (Stufe 1 kostet 1 Punkt, Stufe 2 kostet 2, Stufe 3 kostet 3)
+const talentListe = [
+  { id: "wirt",    name: "Händler",   info: "Pro Stufe 10 % mehr Münzen." },
+  { id: "haut",    name: "Zähe Haut", info: "Pro Stufe 0,4 Sekunden länger unverwundbar nach einem Treffer." },
+  { id: "dash",    name: "Fußwerk",   info: "Pro Stufe lädt der Dash 8 % schneller." },
+  { id: "sammler", name: "Sammler",   info: "Pro Stufe bleibt Beute 1 Sekunde länger und Gold wird häufiger." }
+];
+
+const tutSeiten = [
+  ["Bewegen", "Mit WASD oder den Pfeiltasten. Am Handy ziehst du mit dem Finger links.", "Shift oder der Dash-Knopf macht einen kurzen Spurt, in dem dich nichts trifft."],
+  ["Beute sammeln", "Grüne Beutestücke bringen Punkte. Gold ist selten und dreimal so viel wert.", "Ab Level 2 musst du die Beute in der blauen Zone sichern, sonst ist sie bei einem Tod weg."],
+  ["Gegner und Gefahren", "Rote Gegner jagen dich. Springer, Teleporter und Minen warnen vorher mit einem Ring.", "Schild, Zeitlupe und Turbo (S, Z, T) helfen dir, und mit mehreren Leben hältst du länger durch."],
+  ["Münzen und Shop", "Gesicherte Beute bringt Münzen. Im Shop kaufst du Upgrades, Skins und Klassen.", "Für jedes neue Level und jeden Boss bekommst du Talentpunkte. Viel Erfolg!"]
+];
+
 const bossNamen = ["Wächter", "Schwarm", "Spiral", "Jäger", "Wirbel", "Koloss", "Phantom", "Titan", "Overlord"];
 
 const levels = [];
@@ -54,6 +80,9 @@ for (let i = 0; i < 99; i++) {
     Object.assign(c, { boss: nr, name: i === 98 ? "Das große Finale" : "Boss: " + bossNamen[nr - 1], extraktion: false, wandert: false, minen: 0, dunkel: false, pads: false, wind: false, walzen: 0, maxGegner: 4, abstand: 3.2, ziel: 100 + nr * 10 });
     c.hinweis = "Sammle die Energiekerne, um den Boss zu schwächen!";
   }
+  c.tempo0 = c.tempo; c.abstand0 = c.abstand; // Ursprungswerte für den Balancing-Bot
+  c.m = feinjustierung[i] || 1;
+  c.tempo *= c.m; c.abstand /= c.m;
   levels.push(c);
 }
 

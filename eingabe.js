@@ -32,6 +32,13 @@ function taste(e) {
     if (dir && dir[0] === 0) { auswahl = nachbar(optPunkte(), auswahl, dir[0], dir[1]); klang.tick(); }
     else if (dir) optAktion(auswahl, dir[0]);
     if ((k === " " || k === "enter") && !e.repeat) optAktion(auswahl, 1);
+  } else if (phase === "klasse" || phase === "talente") {
+    const liste = phase === "klasse" ? klassePunkte() : talentZeilen();
+    const dir = { arrowdown: [0, 1], s: [0, 1], arrowup: [0, -1], w: [0, -1], arrowright: [1, 0], d: [1, 0], arrowleft: [-1, 0], a: [-1, 0] }[k];
+    if (dir) { auswahl = nachbar(liste, auswahl, dir[0], dir[1]); klang.tick(); }
+    if ((k === " " || k === "enter") && !e.repeat) { if (phase === "klasse") klasseAktion(auswahl); else talentAktion(auswahl); }
+  } else if (phase === "tutorial") {
+    if ((k === " " || k === "enter") && !e.repeat) tutorialWeiter();
   } else if (phase === "erfolge") {
     const dir = { arrowdown: [0, 1], s: [0, 1], arrowup: [0, -1], w: [0, -1], arrowright: [1, 0], d: [1, 0], arrowleft: [-1, 0], a: [-1, 0] }[k];
     if (dir) { auswahl = nachbar(erfolgePunkte(), auswahl, dir[0], dir[1]); klang.tick(); }
@@ -47,7 +54,7 @@ function taste(e) {
   if (e.key === "Shift" && !e.repeat && phase === "spielen" && dashPause <= 0) {
     dashZeit = 0.15;
     klang.dash();
-    dashPause = 1.2;
+    dashPause = dashWarte();
   }
 }
 window.addEventListener("keydown", taste);
@@ -73,15 +80,18 @@ function ergebnisKopieren() {
 }
 
 // Menüs per Maus oder Fingertipp
-const MENUEPHASEN = ["menue", "shop", "optionen", "erfolge"];
+const MENUEPHASEN = ["menue", "shop", "optionen", "erfolge", "klasse", "talente"];
 
 function aktuelleListe() {
-  return phase === "shop" ? shopPunkte() : phase === "optionen" ? optPunkte() : phase === "erfolge" ? erfolgePunkte() : menuePunkte();
+  return phase === "shop" ? shopPunkte() : phase === "optionen" ? optPunkte() : phase === "erfolge" ? erfolgePunkte()
+    : phase === "klasse" ? klassePunkte() : phase === "talente" ? talentZeilen() : menuePunkte();
 }
 
 function aktionAusfuehren(nr) {
   if (phase === "shop") shopAktion(nr);
   else if (phase === "optionen") optAktion(nr, 1);
+  else if (phase === "klasse") klasseAktion(nr);
+  else if (phase === "talente") talentAktion(nr);
   else if (phase === "menue") menueAktion(nr);
 }
 
@@ -102,6 +112,7 @@ canvas.addEventListener("mousemove", (e) => {
 canvas.addEventListener("click", (e) => {
   tonStarten();
   if (phase === "intro" || phase === "outro") { phase = "menue"; auswahl = 0; return; } // Klick überspringt
+  if (phase === "tutorial") { tutorialWeiter(); return; }
   if (phase === "verloren") { startLevel(lvl); return; }
   if (phase === "geschafft") { weiterNachLevel(); return; }
   if (!MENUEPHASEN.includes(phase)) return;
@@ -123,7 +134,7 @@ function knopfAktion(k) {
   if (k === "pause") pausiert = !pausiert;
   else if (pausiert) return;
   else if (k === "welle") welleStarten();
-  else if (k === "dash" && dashPause <= 0) { dashZeit = 0.15; dashPause = 1.2; klang.dash(); }
+  else if (k === "dash" && dashPause <= 0) { dashZeit = 0.15; dashPause = dashWarte(); klang.dash(); }
 }
 
 function stickBerechnen() {

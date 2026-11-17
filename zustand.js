@@ -1,4 +1,4 @@
-// Zustand: Alles, was sich während des Spiels ändert, dazu Speichern, Laden, Zufall und Hilfsfunktionen.
+// Zustand: Alles, was sich während des Spiels ändert, dazu Speichern, Laden, Zufall, Events und Hilfsfunktionen.
 
 const spieler = { x: B / 2, y: H / 2, radius: 16, tempo: 340 };
 
@@ -9,7 +9,7 @@ let lvl = 0;              // Index des aktuellen Levels
 
 let tode = 0, gesamtZeit = 0;   // Für den Abspann
 
-const einst = { volSound: 0.8, volMusik: 0.8, stumm: false, schwer: 1, farbenblind: false, touch: false }; // Einstellungen
+const einst = { volSound: 0.8, volMusik: 0.8, stumm: false, schwer: 1, farbenblind: false, touch: false, sparmodus: false, sparAuto: false, tutorial: false }; // Einstellungen
 
 let freigeschaltet = 1;         // Wie viele Level schon spielbar sind
 
@@ -51,6 +51,12 @@ let analogX = 0, analogY = 0, padX = 0, padY = 0; // Touch-Stick und Gamepad
 
 let endlosBest = 0, tagesBest = {}, erreicht = {};
 
+let klassenBesitz = ["standard"], klasseAktiv = "standard";
+
+const talente = { wirt: 0, haut: 0, dash: 0, sammler: 0 };
+
+let tutSeite = 0, tutNachStart = false, glow = 1, fpsSumme = 0, fpsAnzahl = 0;
+
 const stats = { levelGeschafft: 0, sauber: 0, maxKrafte: 0, gold: 0, bosse: 0, wellen: 0, kaeufe: 0, muenzenGesamt: 0, tage: 0, finale: 0 };
 
 const sterne = Array.from({ length: 40 }, () => ({ x: Math.random() * B, y: Math.random() * H, s: 0.6 + Math.random() * 1.6, v: 6 + Math.random() * 14 }));
@@ -82,12 +88,15 @@ function laden() {
     if (gespeichert.erreicht) erreicht = gespeichert.erreicht;
     if (typeof gespeichert.endlosBest === "number") endlosBest = gespeichert.endlosBest;
     if (gespeichert.tagesBest) tagesBest = gespeichert.tagesBest;
+    if (Array.isArray(gespeichert.klassen)) klassenBesitz = gespeichert.klassen;
+    if (gespeichert.klasse) klasseAktiv = gespeichert.klasse;
+    if (gespeichert.talente) Object.assign(talente, gespeichert.talente);
     seite = Math.floor((freigeschaltet - 1) / 10);
   } catch (e) { /* Ohne Speicher läuft das Spiel trotzdem. */ }
 }
 
 function speichern() {
-  try { localStorage.setItem("extraktion", JSON.stringify({ einst, frei: freigeschaltet, rekord, muenzen, shop, skins: skinsBesitz, skin: skinAktiv, stats, erreicht, endlosBest, tagesBest })); } catch (e) {}
+  try { localStorage.setItem("extraktion", JSON.stringify({ einst, frei: freigeschaltet, rekord, muenzen, shop, skins: skinsBesitz, skin: skinAktiv, stats, erreicht, endlosBest, tagesBest, klassen: klassenBesitz, klasse: klasseAktiv, talente })); } catch (e) {}
 }
 
 function abgeschlossen(i) {
@@ -108,7 +117,7 @@ const heute = new Date();
 
 const tagKey = heute.getFullYear() * 10000 + (heute.getMonth() + 1) * 100 + heute.getDate();
 
-function tagesLevel() { let i = 4 + (tagKey % 80); if (i % 10 === 9) i++; return i; } // Nie ein Boss
+function tagesLevel(k = tagKey) { let i = 4 + (k % 80); if (i % 10 === 9) i++; return i; } // Nie ein Boss
 
 function mulberry32(a) { // Kleiner Zufallsgenerator, der bei gleichem Startwert immer dieselbe Folge liefert
   return function () {
@@ -122,6 +131,34 @@ function mulberry32(a) { // Kleiner Zufallsgenerator, der bei gleichem Startwert
 let rng = mulberry32(1), rngAktiv = false;
 
 const rnd = () => rngAktiv ? rng() : Math.random();
+
+// Event der Woche: wechselt jeden Montag und gilt in den normalen Leveln
+const events = [
+  { name: "Dunkle Woche",     info: "Alle Level sind dunkel.", dunkel: true },
+  { name: "Münzregen",        info: "Doppelt so viele Münzen.", muenzen: 2 },
+  { name: "Sturmwoche",       info: "In jedem Level weht Wind.", wind: true },
+  { name: "Sperrfeuer-Woche", info: "Überall explodieren Minen.", minen: 5 },
+  { name: "Geisterwoche",     info: "Geister tauchen in jedem Level auf.", geist: true },
+  { name: "Turbo-Woche",      info: "Gegner 15 % schneller, dafür 50 % mehr Münzen.", tempo: 1.15, muenzen: 1.5 }
+];
+
+const wochenNr = Math.floor((Date.UTC(heute.getFullYear(), heute.getMonth(), heute.getDate()) / 86400000 + 3) / 7);
+
+const eventAktiv = events[wochenNr % events.length];
+
+const ev = () => modus === "level" ? eventAktiv : {};
+
+const klasseAktuell = () => klassen.find((k) => k.id === klasseAktiv) || klassen[0];
+
+const ws = () => Math.max(shop.welle, klasseAktuell().welle || 0);  // Stufe der Schockwelle
+
+const mg = () => shop.magnet + (klasseAktuell().magnet || 0);       // Stufe des Magneten
+
+const dashWarte = () => 1.2 * klasseAktuell().dash * (1 - 0.08 * talente.dash);
+
+const talentAusgegeben = () => talentListe.reduce((summe, t) => summe + talente[t.id] * (talente[t.id] + 1) / 2, 0);
+
+const talentPunkte = () => (freigeschaltet - 1) + stats.bosse * 2 - talentAusgegeben();
 
 function cfgAktuell() { return modus === "endlos" ? endlosLevel : levels[lvl]; }
 
